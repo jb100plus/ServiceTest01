@@ -9,7 +9,7 @@ namespace ServiceTest01
     {
         public enum LogLevel { DEBUG = 0, INFO = 1, WARNING = 2, CRITICAL = 3, ERROR = 4 };
 
-        static LogLevel currLogLevel;
+        static readonly LogLevel currLogLevel;
         static readonly TextWriter tw;
         private static readonly object _syncObject = new object();
 
@@ -34,6 +34,7 @@ namespace ServiceTest01
                 }
             }
         }
+
 
         private static void Write(string logMessage, TextWriter w, LogLevel ll)
         {

@@ -8,7 +8,7 @@ namespace ServiceTest01
     {
         private readonly string source;
         private readonly string destination;
-        private MoverCallback cbk;
+        private readonly MoverCallback cbk;
 
         public Mover(string source, string destination, MoverCallback mcbk)
         {
@@ -18,7 +18,7 @@ namespace ServiceTest01
             Logger.Log(Logger.LogLevel.DEBUG, "Mover created");
         }
 
-        public void move()
+        public void Move()
         {
             // etwas Zeit zum Schreiben/Schliessen der Datei geben
             Thread.Sleep(2000);
@@ -36,7 +36,7 @@ namespace ServiceTest01
                 {
                     tries++;
                     if(tries == maxtries)
-                        Logger.Log(Logger.LogLevel.WARNING, "Mover " + ex.Message);
+                        Logger.Log(Logger.LogLevel.WARNING, String.Format("File {0} not moved, {1}", source, ex.Message));
                     Thread.Sleep(1000);
                 }
             }

@@ -11,16 +11,16 @@ namespace ServiceTest01
 
     public partial class ServiceTest01 : ServiceBase
     {
-        private ConcurrentDictionary<string, int> FirstEvent;
+        private readonly ConcurrentDictionary<string, int> FirstEvent;
         private FileSystemWatcher watcher = null;
         private readonly string dirToWatch = null;
         private readonly string dirToMove = null;
         private readonly string watchFilter = null;
 
-        public void callback(string sourcefilnename)
+        public void Callback(string sourcefilnename)
         {
             // Eintrag aus der Liste der Dateien löschen
-            _ = FirstEvent.TryRemove(sourcefilnename, out int dummy);
+            FirstEvent.TryRemove(sourcefilnename, out _);
             Logger.Log(Logger.LogLevel.DEBUG, "callback" + sourcefilnename);
         }
 
@@ -38,7 +38,7 @@ namespace ServiceTest01
         protected override void OnStart(string[] args)
         {
             Logger.Log(Logger.LogLevel.DEBUG, "OnStart");
-            this.createFileSystemWatcher();
+            this.CreateFileSystemWatcher();
         }
 
         protected override void OnStop()
@@ -53,7 +53,7 @@ namespace ServiceTest01
         {
             // die Events werden für manche Datein unter bstimmten Umständen mehrfach ausgelöst
             // es scheint so zu sein, dass beim Anlegen ein OnCreate-Event ausgelöst wird und dann 
-            // mehrere OnChanged Events, abhämgig ist das auch von der Application, die die Datei anlegt
+            // mehrere OnChanged Events, abhängig ist das auch von der Application, die die Datei anlegt
             Logger.Log(Logger.LogLevel.DEBUG, e.ChangeType + " " + e.FullPath);
             FileAttributes attr = File.GetAttributes(e.FullPath);
             // Directories ignorieren
@@ -64,16 +64,18 @@ namespace ServiceTest01
                 {
                     // ja
                     Logger.Log(Logger.LogLevel.DEBUG, "in der Liste " + e.FullPath);
+#if DEBUG
                     int val = -1;
                     FirstEvent.TryGetValue(e.FullPath, out val);
                     Logger.Log(Logger.LogLevel.DEBUG, "in der Liste " + e.FullPath + "val = " + val.ToString());
+#endif
                     // ist das das zweite Event
                     if (val == 0)
                     {
                         // nur genau beim zweiten Event
                         FirstEvent[e.FullPath] = 1;
-                        Mover mv = new Mover(e.FullPath, dirToMove + e.Name, new MoverCallback(callback));
-                        Thread tws = new Thread(new ThreadStart(mv.move));
+                        Mover mv = new Mover(e.FullPath, dirToMove + e.Name, new MoverCallback(Callback));
+                        Thread tws = new Thread(new ThreadStart(mv.Move));
                         tws.Start();
                     }
                     // alle weiteren Events für die Datei werden ignoriert
@@ -92,7 +94,7 @@ namespace ServiceTest01
         }
 
         // Create a new FileSystemWatcher and set its properties.
-        private void createFileSystemWatcher()
+        private void CreateFileSystemWatcher()
         {
             Logger.Log(Logger.LogLevel.DEBUG, "createFileSystemWatcher " + dirToWatch);
             watcher = new FileSystemWatcher(dirToWatch)
