@@ -1,142 +1,91 @@
-﻿using System;
-using System.Collections.Concurrent;
+﻿using System.Collections.Concurrent;
+using System.Configuration;
 using System.IO;
 using System.ServiceProcess;
 using System.Threading;
-using System.Configuration;
 
 namespace ServiceTest01
 {
-    // Delegate that defines the signature for the callback method.
-    //
+    // Delegate that defines the signature for the Mover callback method
     public delegate void MoverCallback(string sourcefilename);
 
-    public static class Logger
-    {
-        static readonly TextWriter tw;
-        private static readonly object _syncObject = new object();
-
-        static Logger()
-        {
-            //tw = TextWriter.Synchronized(File.AppendText(SPath() + "\\Log.txt"));
-            tw = TextWriter.Synchronized(File.AppendText(SPath()));
-        }
-
-        public static string SPath()
-        {
-            System.Collections.Specialized.NameValueCollection appSettings = ConfigurationManager.AppSettings;
-            return appSettings["logFileName"];
-            //return @"D:\jb\Visual Studio 2019\Projects\ServiceTest01\bin\Debug\ServiceTest01.log";
-        }
-        
-        public static void Log(string logMessage)
-        {
-            try
-            {
-                Write(logMessage, tw);
-            }
-            catch (IOException)
-            {
-                tw.Close();
-            }
-        }
-
-        private static void Write(string logMessage, TextWriter w)
-        {
-            // only one thread can own this lock, so other threads 
-            // entering this method will wait here until lock is
-            // available.
-            lock (_syncObject)
-            {
-                w.WriteLine("{0} {1} : {2}", DateTime.Now.ToLongTimeString(), DateTime.Now.ToLongDateString(), logMessage);
-                // Update the underlying file.
-                w.Flush();
-            }
-        }
-    }
-
-    class Mover
-    {
-        private readonly string source;
-        private readonly string destination;
-        private MoverCallback cbk;
-        
-        public Mover(string source, string destination, MoverCallback mcbk)
-        {
-            this.source = source;
-            this.destination = destination;
-            this.cbk = mcbk;
-            Logger.Log("Mover created");
-        }
-
-        public void move()
-        {
-            Thread.Sleep(2000);
-            int tries = 0;
-            int maxtries = 3;
-            while (tries <= maxtries)
-            {
-                try
-                {
-                    File.Move(source, destination);
-                    Logger.Log($"File moved from  {source} to {destination}");
-                    tries = maxtries + 1;
-                }
-                catch (Exception ex)
-                {
-                    Logger.Log("Mover " + ex.Message);
-                    tries++;
-                    Thread.Sleep(1000);
-                }
-            }
-            Thread.Sleep(2000);
-            cbk(source);
-        }
-
-
-    }
     public partial class ServiceTest01 : ServiceBase
     {
-        private static EventWaitHandle LogWaitHandle = new EventWaitHandle(true, EventResetMode.ManualReset, "SHARED_BY_ALL_PROCESSES");
-        //private static EventWaitHandle MoveWaitHandle = new EventWaitHandle(true, EventResetMode.ManualReset, "SHARED_BY_ALL_PROCESSES");
-        //private List<string> FirstEvent;
         private ConcurrentDictionary<string, int> FirstEvent;
-
-
         private FileSystemWatcher watcher = null;
+        private readonly string dirToWatch = null;
+        private readonly string dirToMove = null;
+        private readonly string watchFilter = null;
 
         public void callback(string sourcefilnename)
         {
+            // Eintrag aus der Liste der Dateien löschen
             _ = FirstEvent.TryRemove(sourcefilnename, out int dummy);
-            Logger.Log("callback" + sourcefilnename);
+            Logger.Log(Logger.LogLevel.DEBUG, "callback" + sourcefilnename);
+        }
+
+        public ServiceTest01()
+        {
+            InitializeComponent();
+            System.Collections.Specialized.NameValueCollection appSettings = ConfigurationManager.AppSettings;
+            dirToWatch = appSettings["DirectoryToWatch"];
+            dirToMove = appSettings["DirectoryToMove"];
+            watchFilter = appSettings["WatchFilter"];
+            FirstEvent = new ConcurrentDictionary<string, int>();
+            Logger.Log(Logger.LogLevel.DEBUG, System.String.Format("{0} {1} {2}", dirToWatch, dirToMove, watchFilter));
+        }
+
+        protected override void OnStart(string[] args)
+        {
+            Logger.Log(Logger.LogLevel.DEBUG, "OnStart");
+            this.createFileSystemWatcher();
+        }
+
+        protected override void OnStop()
+        {
+            watcher.Dispose();
+            FirstEvent.Clear();
+            Logger.Log(Logger.LogLevel.DEBUG, "OnStop");
         }
 
         // Define the event handlers.
         private void OnCreated(object source, FileSystemEventArgs e)
         {
+            // die Events werden für manche Datein unter bstimmten Umständen mehrfach ausgelöst
+            // es scheint so zu sein, dass beim Anlegen ein OnCreate-Event ausgelöst wird und dann 
+            // mehrere OnChanged Events, abhämgig ist das auch von der Application, die die Datei anlegt
+            Logger.Log(Logger.LogLevel.DEBUG, e.ChangeType + " " + e.FullPath);
             FileAttributes attr = File.GetAttributes(e.FullPath);
-            // nur when kein Ordner
+            // Directories ignorieren
             if (!((attr & FileAttributes.Directory) == FileAttributes.Directory))
             {
-                Logger.Log(e.ChangeType + " " + e.FullPath + e.ChangeType);
+                // gab es für diese Datei bereits ein Event
                 if (FirstEvent.ContainsKey(e.FullPath))
                 {
-                    Logger.Log("in der Liste " + e.FullPath);
+                    // ja
+                    Logger.Log(Logger.LogLevel.DEBUG, "in der Liste " + e.FullPath);
                     int val = -1;
                     FirstEvent.TryGetValue(e.FullPath, out val);
-                    Logger.Log("in der Liste " + e.FullPath + "val = " + val.ToString());
+                    Logger.Log(Logger.LogLevel.DEBUG, "in der Liste " + e.FullPath + "val = " + val.ToString());
+                    // ist das das zweite Event
                     if (val == 0)
                     {
+                        // nur genau beim zweiten Event
                         FirstEvent[e.FullPath] = 1;
-                        Mover mv = new Mover(e.FullPath, @"D:\temp\1\_" + e.Name, new MoverCallback(callback));
+                        Mover mv = new Mover(e.FullPath, dirToMove + e.Name, new MoverCallback(callback));
                         Thread tws = new Thread(new ThreadStart(mv.move));
                         tws.Start();
-                        //_ = FirstEvent.TryRemove(e.FullPath, out int dummy);
+                    }
+                    // alle weiteren Events für die Datei werden ignoriert
+                    else
+                    {
+                        Logger.Log(Logger.LogLevel.DEBUG, "ignore " + e.ChangeType + " " + e.FullPath);
                     }
                 }
                 else
                 {
-                    Logger.Log(">>> in die Liste " + e.FullPath);
+                    // beim ersten Event
+                    Logger.Log(Logger.LogLevel.DEBUG, ">>> in die Liste " + e.FullPath);
                     FirstEvent[e.FullPath] = 0;
                 }
             }
@@ -145,8 +94,8 @@ namespace ServiceTest01
         // Create a new FileSystemWatcher and set its properties.
         private void createFileSystemWatcher()
         {
-            Logger.Log("createFileSystemWatcher");
-            watcher = new FileSystemWatcher(@"D:\temp")
+            Logger.Log(Logger.LogLevel.DEBUG, "createFileSystemWatcher " + dirToWatch);
+            watcher = new FileSystemWatcher(dirToWatch)
             {
                 // Watch for changes in LastAccess and LastWrite times, and
                 // the renaming of files or directories.
@@ -156,37 +105,13 @@ namespace ServiceTest01
                                  | NotifyFilters.FileName,
                 IncludeSubdirectories = false
             };
-
-            // Only watch text files.
-            //watcher.Filter = "*.txt";
-
+            watcher.Filter = watchFilter;
             // Add event handlers.
             watcher.Created += OnCreated;
             watcher.Changed += OnCreated;
-
             // Begin watching.
             watcher.EnableRaisingEvents = true;
-            Logger.Log("createFileSystemWatcher done");
-        }
-   
-        public ServiceTest01()
-        {
-            InitializeComponent();
-            FirstEvent = new ConcurrentDictionary<string, int>();
-            Logger.Log("InitializeComponent");
-        }
-
-        protected override void OnStart(string[] args)
-        {
-            Logger.Log("OnStart");
-            this.createFileSystemWatcher();
-        }
-
-        protected override void OnStop()
-        {
-            watcher.Dispose();
-            FirstEvent.Clear();
-            Logger.Log("OnStop");
+            Logger.Log(Logger.LogLevel.DEBUG, "createFileSystemWatcher done");
         }
     }
 }
