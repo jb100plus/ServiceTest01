@@ -48,6 +48,7 @@
     <Reference Include="System.Xml" />
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="RMCSVFile.cs" />
     <Compile Include="Logger.cs" />
     <Compile Include="Mover.cs" />
     <Compile Include="ProjectInstaller.cs">

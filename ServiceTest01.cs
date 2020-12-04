@@ -4,6 +4,7 @@ using System.IO;
 using System.ServiceProcess;
 using System.Threading;
 
+
 namespace ServiceTest01
 {
     // Delegate that defines the signature for the Mover callback method
@@ -63,18 +64,16 @@ namespace ServiceTest01
                 if (FirstEvent.ContainsKey(e.FullPath))
                 {
                     // ja
-                    Logger.Log(Logger.LogLevel.DEBUG, "in der Liste " + e.FullPath);
-#if DEBUG
                     int val = -1;
                     FirstEvent.TryGetValue(e.FullPath, out val);
                     Logger.Log(Logger.LogLevel.DEBUG, "in der Liste " + e.FullPath + "val = " + val.ToString());
-#endif
-                    // ist das das zweite Event
+                    // ist das das zweite Event?
+                    // dann ist der Dateiname in der Liste und der Wert ist 0
                     if (val == 0)
                     {
-                        // nur genau beim zweiten Event
+                        // nur genau einmal, beim zweiten Event
                         FirstEvent[e.FullPath] = 1;
-                        Mover mv = new Mover(e.FullPath, dirToMove + e.Name, new MoverCallback(Callback));
+                        Mover mv = new Mover(e.FullPath, dirToMove, new MoverCallback(Callback));
                         Thread tws = new Thread(new ThreadStart(mv.Move));
                         tws.Start();
                     }

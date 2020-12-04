@@ -38,13 +38,13 @@ namespace ServiceTest01
 
         private static void Write(string logMessage, TextWriter w, LogLevel ll)
         {
-            // only one thread can own this lock, so other threads 
+            // synchronize ,only one thread can own this lock, so other threads 
             // entering this method will wait here until lock is released
             // see https://docs.microsoft.com/en-us/archive/blogs/ericlippert/locks-and-exceptions-do-not-mix
             // leave the scope to ensure the lock is released
             lock (_syncObject)
             {
-                w.WriteLine("{0} {1} {2}: {3}", Enum.GetName(typeof(LogLevel), ll), DateTime.Now.ToShortDateString(), DateTime.Now.ToShortTimeString(), logMessage);
+                w.WriteLine("{0} {1}: {2}", Enum.GetName(typeof(LogLevel), ll), DateTime.Now.ToString("yyyy.MM.dd hh:mm:ss.fff"), logMessage);
                 // Update the underlying file.
                 w.Flush();
             }
